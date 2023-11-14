@@ -6,6 +6,7 @@ use std::time::Duration;
 use axum::{
     body::{Body, BoxBody},
     http::{Request, Response},
+    Router,
 };
 use tower_http::{
     classify::ServerErrorsFailureClass,
@@ -23,6 +24,19 @@ async fn main() {
         .parse()
         .expect("Unable to parse env variable PORT");
 
+    let app = app();
+
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], http_port));
+
+    tracing::warn!("Listening on {addr}");
+
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .expect("Failed to start server");
+}
+
+fn app() -> Router {
     let tracing_layer = TraceLayer::new_for_http()
         .make_span_with(|_request: &Request<Body>| {
             let request_id = Uuid::new_v4().to_string();
@@ -51,13 +65,5 @@ async fn main() {
 
     let cors = CorsLayer::new().allow_origin(Any);
 
-    let app = route::create_router().layer(cors).layer(tracing_layer);
-
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], http_port));
-
-    tracing::warn!("Listening on {addr}");
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .expect("Failed to start server");
+    route::create_router().layer(cors).layer(tracing_layer)
 }
